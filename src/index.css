@@ -1,91 +1,136 @@
-* {
-  font-family: sans-serif;
+/** {*/
+/*  font-family: sans-serif;*/
+/*}*/
+
+/*body {*/
+/*  margin: 0;*/
+/*  padding: 0;*/
+/*  width: 100vw;*/
+/*  height: 100vh;*/
+/*  background-color: #fafafc ;*/
+/*  color: #777;*/
+/*  display: flex;*/
+/*  justify-content: center;*/
+/*}*/
+
+/*p {*/
+/*  font-weight: 200;*/
+/*  font-size: 14px;*/
+/*}*/
+
+/*.app {*/
+/*  width: 80vw;*/
+/*  margin: 10vh;*/
+/*  height: 80vh;*/
+/*  display: flex;*/
+/*  flex-direction: column;*/
+/*}*/
+
+/*.search-result {*/
+/*  margin-top: 10px;*/
+/*  overflow: scroll;*/
+/*}*/
+
+/*.surprise {*/
+/*  background-color: #ececf1;*/
+/*  color: black;*/
+/*  border-radius: 5px ;*/
+/*  font-weight: 600;*/
+/*  padding: 4px 12px;*/
+/*  margin: 0 0 2px 5px;*/
+/*  border: none;*/
+/*}*/
+
+/*.input-container {*/
+/*  width: 100%;*/
+/*  display: flex;*/
+/*  border: solid 0.5px #cacaca;*/
+/*  box-sizing: border-box;*/
+/*  border-radius: 6px;*/
+/*  box-shadow: rgba(0,0,82,0.15) 0 2px 4px;*/
+/*  overflow: hidden;*/
+/*}*/
+
+/*.input-container input {*/
+/*  border: none;*/
+/*  padding: 13px 14px;*/
+/*  box-sizing: border-box;*/
+/*  font-size: 15px;*/
+/*  outline: none;*/
+/*  width: 90%;*/
+/*  font-weight: 200;*/
+/*}*/
+
+/*.input-container input::placeholder {*/
+/*  color: #cacaca;*/
+/*  font-weight: 200;*/
+/*}*/
+
+/*.input-container button {*/
+/*  min-width: 10%;*/
+/*  border: none;*/
+/*  border-left: 1px solid #cacaca;*/
+/*  background-color: #fff;*/
+/*  color: #777;*/
+/*  font-weight: bold;*/
+/*  cursor: pointer;*/
+/*}*/
+
+/*.input-container button:active{*/
+/*  background-color: #cacaca;*/
+/*}*/
+
+/*.answer {*/
+/*  padding: 13px 14px;*/
+/*  border: solid 0.5px #cacaca;*/
+/*  background-color: #fff;*/
+/*  margin:5px;*/
+/*  font-size: 15px;*/
+/*  font-weight: 200;*/
+/*  border-radius: 6px;*/
+/*}*/
+
+
+body { font-family: sans-serif; padding: 20px; background-color: #f4f4f4; }
+.app { max-width: 800px; margin: 0 auto; background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+h1 { text-align: center; color: #333; }
+
+.logo {
+    width: 150px; /* Adjust the desired width */
+    height: auto;
+    display: block;
+    margin: 0 auto;
 }
 
-body {
-  margin: 0;
-  padding: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: #fafafc ;
-  color: #777;
-  display: flex;
-  justify-content: center;
-}
+.pdf-section, .chat-section { margin-bottom: 25px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #fafafa;}
+.pdf-upload-label { background-color: #007bff; color: white; padding: 10px 15px; border-radius: 4px; cursor: pointer; display: inline-block; margin-right: 10px; }
+.pdf-upload-label:hover { background-color: #0056b3; }
+.pdf-button, .clear-context-button, .clear-button, .surprise { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-left: 5px; }
+.pdf-button { background-color: #28a745; color: white; }
+.pdf-button:disabled { background-color: #aaa; }
+.pdf-button:hover:not(:disabled) { background-color: #218838; }
+.clear-context-button { background-color: #ffc107; color: #333; }
+.clear-context-button:hover:not(:disabled) { background-color: #e0a800; }
+.clear-button { background-color: #dc3545; color: white; display: block; margin: 15px auto 0;}
+.clear-button:hover:not(:disabled) { background-color: #c82333; }
+.surprise { background-color: #17a2b8; color: white; }
+.surprise:hover:not(:disabled) { background-color: #138496; }
+.pdf-status { margin-top: 10px; font-size: 0.9em; color: #555; background-color: #e9f5e9; padding: 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
+.pdf-status span { font-weight: bold; }
 
-p {
-  font-weight: 200;
-  font-size: 14px;
-}
+.info-text { font-size: 0.9em; color: #666; margin-bottom: 15px; }
+.input-container { display: flex; margin-bottom: 15px; }
+.input-container input { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px 0 0 4px; }
+.input-container button { padding: 10px 15px; border: none; background-color: #007bff; color: white; border-radius: 0 4px 4px 0; cursor: pointer; }
+.input-container button:disabled { background-color: #aaa; }
+.input-container button:hover:not(:disabled) { background-color: #0056b3; }
 
-.app {
-  width: 80vw;
-  margin: 10vh;
-  height: 80vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.search-result {
-  margin-top: 10px;
-  overflow: scroll;
-}
-
-.surprise {
-  background-color: #ececf1;
-  color: black;
-  border-radius: 5px ;
-  font-weight: 600;
-  padding: 4px 12px;
-  margin: 0 0 2px 5px;
-  border: none;
-}
-
-.input-container {
-  width: 100%;
-  display: flex;
-  border: solid 0.5px #cacaca;
-  box-sizing: border-box;
-  border-radius: 6px;
-  box-shadow: rgba(0,0,82,0.15) 0 2px 4px;
-  overflow: hidden;
-}
-
-.input-container input {
-  border: none;
-  padding: 13px 14px;
-  box-sizing: border-box;
-  font-size: 15px;
-  outline: none;
-  width: 90%;
-  font-weight: 200;
-}
-
-.input-container input::placeholder {
-  color: #cacaca;
-  font-weight: 200;
-}
-
-.input-container button {
-  min-width: 10%;
-  border: none;
-  border-left: 1px solid #cacaca;
-  background-color: #fff;
-  color: #777;
-  font-weight: bold;
-  cursor: pointer;
-}
-
-.input-container button:active{
-  background-color: #cacaca;
-}
-
-.answer {
-  padding: 13px 14px;
-  border: solid 0.5px #cacaca;
-  background-color: #fff;
-  margin:5px;
-  font-size: 15px;
-  font-weight: 200;
-  border-radius: 6px;
-}
+.error-message { color: #dc3545; font-weight: bold; margin-top: 10px; }
+.search-result { max-height: 400px; overflow-y: auto; border: 1px solid #eee; padding: 10px; margin-top: 15px; border-radius: 4px; }
+.chat-entry { margin-bottom: 10px; padding: 8px; border-radius: 4px; }
+.chat-entry.user { background-color: #e7f3ff; text-align: right; }
+.chat-entry.model { background-color: #f1f0f0; }
+.chat-entry.system { background-color: #fffbe6; font-style: italic; color: #888; font-size: 0.9em; text-align: center; }
+.chat-entry p { margin: 0; word-wrap: break-word; }
+.chat-entry strong { color: #333; }
+.loading-indicator { text-align: center; color: #888; padding: 10px;}

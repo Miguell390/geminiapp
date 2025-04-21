@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react"; // Added useCallback
 //import './App.css'; // Assuming you have some basic CSS
+// import logo from 'public/pdfWhisperer.jpg';
 
 const App = () => {
     // --- State Variables ---
@@ -204,7 +205,8 @@ const App = () => {
     // --- Rendering ---
     return (
         <div className="app">
-            <h1>📄 Chat with your PDF 🤖</h1>
+            <img src="./pdfWhisperer.jpg" alt="pdf whiseprer logo" className="logo"/>
+
 
             {/* --- PDF Upload Section --- */}
             <div className="pdf-section">
