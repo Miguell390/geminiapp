@@ -16,7 +16,6 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 let pdfTextContext = null;
 let pdfFileName = null; // Optional: Store the filename
 
-
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         cb(null, 'uploads/'); // <-- Directory to save files (make sure it exists)
@@ -134,54 +133,49 @@ app.post('/gemini', async (req, res) => {
             return res.status(400).send({ message: 'Message cannot be empty.' });
         }
 
-        let prompt = ""; // Initialize prompt string
-        let usingContext = false; // Flag (optional for logging)
-
         console.log("Received message:", selectedChatDocument);
 
-        if (isPdfContextRequired) {
-            console.log("Attempting to use PDF context...");
-            if (pdfTextContext || selectedChatDocument.length > 0) {
-                // Construct a prompt that explicitly tells the model to use the context
+        // --- Context Injection ---
+        let prompt = message; // Start with the original user message
 
-                prompt = "";
-                if (selectedChatDocument.length == 1) {
-                    prompt = `Based *only* on the following text content extracted from the document '${selectedChatDocument[0] || 'provided'}', please answer the user's question.`;
-                }
-                else {
-                    prompt = `Based *only* on the following text content extracted from the documents '${selectedChatDocument.join(', ')}', please answer the user's question.`;
-                }
+        if (pdfTextContext || selectedChatDocument.length > 0) {
+            // Construct a prompt that explicitly tells the model to use the context
 
-                prompt += `If the answer cannot be found in the text, state that clearly. Do not use any prior knowledge outside of this document context.`;
-
-                for (let index = 0; index < selectedChatDocument.length; index++) {
-                    const file = selectedChatDocument[index];
-                    // get file content from uploadedFiles
-                    const fileContent = uploadedFiles.find(uploadedFile => uploadedFile.originalname === file);
-                    if (fileContent) {
-                        prompt += `
-                            --- DOCUMENT TITLE START ---
-                            ${fileContent.originalname}
-                            --- DOCUMENT TITLE END ---
-                            --- DOCUMENT CONTENT START ---
-                            ${fileContent.pdfTextContext}
-                            --- DOCUMENT CONTENT END ---
-                            `;
-                        console.log(`Using PDF context from ${fileContent.originalname} for the prompt.`);
-                    }
-                }
-
-                prompt += `User Question: "${message}"Answer:`;
-                usingContext = true;
-                // console.log(`Using PDF context from ${pdfFileName} for the prompt.`);
-                console.log("prompt:\n", prompt.substring(0, 200) + "..."); // Log truncated prompt
-                // Conditional Logic based on the toggle
-
-            } else {
-                // User wants PDF context, but it's not loaded
-                console.warn("User requested PDF context, but none is loaded.");
-                return res.status(400).send({ message: `You asked a question about the PDF, but no PDF context is currently loaded. Please upload a PDF first or toggle off the 'Ask about PDF' option.` });
+            prompt = "";
+            if (selectedChatDocument.length == 1) {
+                prompt = `Based *only* on the following text content extracted from the document '${selectedChatDocument[0] || 'provided'}', please answer the user's question.`;
             }
+            else {
+                prompt = `Based *only* on the following text content extracted from the documents '${selectedChatDocument.join(', ')}', please answer the user's question.`;
+            }
+
+            prompt += `
+If the answer cannot be found in the text, state that clearly. Do not use any prior knowledge outside of this document context.`;
+
+            for (let index = 0; index < selectedChatDocument.length; index++) {
+                const file = selectedChatDocument[index];
+                // get file content from uploadedFiles
+                const fileContent = uploadedFiles.find(uploadedFile => uploadedFile.originalname === file);
+                if (fileContent) {
+                    prompt += `
+--- DOCUMENT TITLE START ---
+${fileContent.originalname}
+--- DOCUMENT TITLE END ---
+--- DOCUMENT CONTENT START ---
+${fileContent.pdfTextContext}
+--- DOCUMENT CONTENT END ---
+`;
+                    console.log(`Using PDF context from ${fileContent.originalname} for the prompt.`);
+                }
+            }
+
+            prompt += `
+User Question: "${message}"
+
+Answer:`;
+            // console.log(`Using PDF context from ${pdfFileName} for the prompt.`);
+            console.log("prompt:\n", prompt.substring(0, 200) + "..."); // Log truncated prompt
+
         } else {
             // General question - use the message directly as the prompt
             prompt = message;
