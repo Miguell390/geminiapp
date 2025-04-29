@@ -14,6 +14,7 @@ const App = () => {
     const [isProcessing, setIsProcessing] = useState(false); // General loading state for API calls
     const [isPdfQuestion, setIsPdfQuestion] = useState(false); // Default to general question
 
+
     // Add a new state to track the selected document
     const [selectedChatDocument, setSelectedChatDocument] = useState(null);
 
@@ -104,6 +105,28 @@ const App = () => {
             });
 
             setChatHistory(oldHistory => [...oldHistory, { role: "system", parts: [{ text: `PDF '${data.fileName}' uploaded. You can now ask questions about it.` }] }]);
+
+            // setPdfFilesName(files => [...files, { fileName: data.fileName, checked: true }]);
+            // const name = pdfFilesName.filter(file => file.checked).map(file => file.fileName).join(", ");
+            // setPdfFileName(name);
+
+            setPdfFilesName((files) => {
+                const updatedFiles = [...files, { fileName: data.fileName, checked: true }];
+                let name = pdfFilesName.filter(file => file.checked).map(file => file.fileName).join(", ");
+
+                // Replace the last comma with " and"
+                const lastCommaIndex = name.lastIndexOf(",");
+
+                if (lastCommaIndex !== -1) {
+                    name = name.substring(0, lastCommaIndex) + " and" + name.substring(lastCommaIndex + 1);
+                }
+
+                setPdfFileName(name);
+
+                return updatedFiles;
+            });
+
+            setChatHistory(oldHistory => [...oldHistory, { role: "system", parts: [{ text: `PDF '${data.fileName}' uploaded. You can now ask questions about it.` }] }]);
         } catch (err) {
             console.error("Upload failed:", err);
             setError(`Upload failed: ${err.message}`);
@@ -139,7 +162,7 @@ const App = () => {
                 method: 'POST',
                 body: JSON.stringify({
                     history: chatHistory,
-                    message: currentMessage, // Send the captured message
+                    message: currentMessage, // Send the captured message<<<<<<< HEAD
                     // --- Send the toggle state ---
                     isPdfContextRequired: isPdfQuestion, // Send boolean flag
                     selectedChatDocument: selectedDocuments // Send the selected document name
