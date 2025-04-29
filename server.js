@@ -23,7 +23,17 @@ let pdfFileName = null; // Optional: Store the filename
 
 // --- Multer Configuration for File Uploads ---
 // We'll use memory storage for simplicity. For large PDFs, consider disk storage.
-const storage = multer.memoryStorage();
+// const storage = multer.memoryStorage();
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/'); // <-- Directory to save files (make sure it exists)
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + '-' + file.originalname); // Save with a unique name
+    }
+});
+
 const upload = multer({
     storage: storage,
     limits: { fileSize: 10 * 1024 * 1024 }, // Example: Limit PDF size to 10MB
@@ -36,6 +46,21 @@ const upload = multer({
     }
 });
 
+// if uploads dir not exist -> create new
+const uploadsDbFile = 'database.json';
+
+// Load previous uploads
+let uploadedFiles = [];
+if (fs.existsSync(uploadsDbFile)) {
+    uploadedFiles = JSON.parse(fs.readFileSync(uploadsDbFile));
+}
+
+// --- Gemini API Initialization ---
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEN_AI_KEY);
+// Choose a model that supports larger context windows if needed, e.g., gemini-1.5-flash
+// Check Gemini documentation for latest model capabilities and context limits.
+// gemini-pro might have limitations on context length. gemini-1.5-flash or pro often better.
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" }); // Updated model suggestion
 
 // --- API Endpoints ---
 
@@ -46,13 +71,30 @@ app.post('/upload-pdf', upload.single('pdfFile'), async (req, res) => {
     }
 
     try {
-        console.log(`Processing PDF: ${req.file.originalname}`);
+        console.log(`Processing PDF: ${req.file.originalname}`, req.file);
         // pdf-parse works with the buffer directly from memoryStorage
-        const data = await pdf(req.file.buffer);
+        const fileContent = fs.readFileSync(req.file.path);
+        // const data = await pdf(req.file.buffer);
+        const data = await pdf(fileContent);
+
+        console.log("data:\n", data);
 
         // Store the extracted text globally (replace with better storage if needed)
         pdfTextContext = data.text;
         pdfFileName = req.file.originalname; // Store the name
+
+        // save file in uploadedFiles
+        const fileInfo = {
+            // pdfFileName: pdfFileName,
+            path: req.file.path,
+            originalname: req.file.originalname,
+            uploadTime: new Date(),
+            pdfTextContext: pdfTextContext
+        };
+
+        // Save file info to memory
+        uploadedFiles.push(fileInfo);
+        fs.writeFileSync(uploadsDbFile, JSON.stringify(uploadedFiles, null, 2));
 
         console.log(`Successfully processed ${pdfFileName}. Text length: ${pdfTextContext.length}`);
         res.send({
@@ -70,20 +112,29 @@ app.post('/upload-pdf', upload.single('pdfFile'), async (req, res) => {
 });
 
 // Endpoint to Clear PDF Context
-app.post('/clear-context', (req, res) => {
+app.post('/clear-context', async (req, res) => {
     console.log('Clearing PDF context.');
+    console.log("pdfFileName:\n", pdfFileName);
+    console.log("\npdfTextContext:\n", pdfTextContext);
+    console.log("\npdfToRemove:\n", req.body.fileName);
+
     pdfTextContext = null;
     pdfFileName = null;
+    // uploadedFiles = [];
+    const removeFile = uploadedFiles.find(file => file.originalname === req.body.fileName);
+    uploadedFiles = uploadedFiles.filter(file => file.originalname !== req.body.fileName);
+    fs.writeFileSync(uploadsDbFile, JSON.stringify(uploadedFiles, null, 2)); // Clear the file info
+
+    try {
+        const dir = removeFile.path;
+        await fs.promises.rm(dir, { recursive: true, force: true });
+        console.log(`Cleared all contents in: ${dir}`);
+    } catch (err) {
+        console.error(`Error clearing directory: ${err}`);
+    }
+
     res.send({ message: 'PDF context cleared.' });
 });
-
-
-// --- START OF FILE server.js --- // (Make sure other parts are as per previous step)
-
-// ... (other requires, app setup, PDF storage, multer, Gemini init remain the same) ...
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEN_AI_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" }); // Use this initialized model
-
 
 // ... (upload-pdf and clear-context endpoints remain the same) ...
 
@@ -95,7 +146,7 @@ app.post('/gemini', async (req, res) => {
     // --- Start directly with the intended logic ---
     try {
         // Get data from request body
-        const { history, message, isPdfContextRequired } = req.body; // Get the toggle flag
+        const { history, message, isPdfContextRequired, selectedChatDocument } = req.body; // Get the toggle flag
 
         if (!message) {
             return res.status(400).send({ message: 'Message cannot be empty.' });
@@ -104,25 +155,52 @@ app.post('/gemini', async (req, res) => {
         let prompt = ""; // Initialize prompt string
         let usingContext = false; // Flag (optional for logging)
 
-        // Conditional Logic based on the toggle
+        console.log("Received message:", selectedChatDocument);
+
         if (isPdfContextRequired) {
             console.log("Attempting to use PDF context...");
-            if (pdfTextContext) {
-                // Construct the prompt WITH PDF context
-                prompt = `
-                    Based *only* on the following text content extracted from the document '${pdfFileName || 'provided'}', please answer the user's question.
-                    If the answer cannot be found in the text, state that clearly ("Based on the provided document text, I cannot answer this question.").
-                    Do not use any prior knowledge outside of this document context. Do not mention the document structure unless asked.
+            if (pdfTextContext || selectedChatDocument.length > 0) {
+                // Construct a prompt that explicitly tells the model to use the context
 
-                    --- DOCUMENT CONTENT START ---
-                    ${pdfTextContext}
-                    --- DOCUMENT CONTENT END ---
+                prompt = "";
+                if (selectedChatDocument.length == 1) {
+                    prompt = `Based *only* on the following text content extracted from the document '${selectedChatDocument[0] || 'provided'}', please answer the user's question.`;
+                }
+                else {
+                    prompt = `Based *only* on the following text content extracted from the documents '${selectedChatDocument.join(', ')}', please answer the user's question.`;
+                }
 
-                    User Question: "${message}"
+                prompt += `
+If the answer cannot be found in the text, state that clearly. Do not use any prior knowledge outside of this document context.`;
 
-                    Answer:`;
-                console.log(`Using PDF context from ${pdfFileName} for the prompt.`);
+                for (let index = 0; index < selectedChatDocument.length; index++) {
+                    const file = selectedChatDocument[index];
+                    // get file content from uploadedFiles
+                    const fileContent = uploadedFiles.find(uploadedFile => uploadedFile.originalname === file);
+                    if (fileContent) {
+                        prompt += `
+--- DOCUMENT TITLE START ---
+${fileContent.originalname}
+--- DOCUMENT TITLE END ---
+--- DOCUMENT CONTENT START ---
+${fileContent.pdfTextContext}
+--- DOCUMENT CONTENT END ---
+`;
+                        console.log(`Using PDF context from ${fileContent.originalname} for the prompt.`);
+                    }
+                }
+
+                prompt += `
+User Question: "${message}"
+
+Answer:`;
                 usingContext = true;
+                // console.log(`Using PDF context from ${pdfFileName} for the prompt.`);
+                console.log("prompt:\n", prompt.substring(0, 200) + "..."); // Log truncated prompt
+                // Conditional Logic based on the toggle
+
+
+
             } else {
                 // User wants PDF context, but it's not loaded
                 console.warn("User requested PDF context, but none is loaded.");
@@ -153,12 +231,12 @@ app.post('/gemini', async (req, res) => {
         let errorMessage = 'An error occurred with the Gemini API.';
         // Attempt to get more specific error message if available
         if (error.message) {
-             errorMessage = error.message;
-             // Check if it's the specific system role error to provide clearer feedback maybe
-             if (error.message.includes("system role is not supported")) {
-                 errorMessage = "An internal error occurred. The AI model doesn't support 'system' messages in the history."
-                 // This shouldn't happen now, but good for debugging
-             }
+            errorMessage = error.message;
+            // Check if it's the specific system role error to provide clearer feedback maybe
+            if (error.message.includes("system role is not supported")) {
+                errorMessage = "An internal error occurred. The AI model doesn't support 'system' messages in the history."
+                // This shouldn't happen now, but good for debugging
+            }
         }
         res.status(500).send({ message: errorMessage });
     }
