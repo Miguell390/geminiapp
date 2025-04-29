@@ -9,9 +9,13 @@ const App = () => {
     const [chatHistory, setChatHistory] = useState([]);
     const [selectedFile, setSelectedFile] = useState(null); // Holds the selected PDF file object
     const [pdfFileName, setPdfFileName] = useState(null); // Name of the loaded PDF
+    const [pdfFilesName, setPdfFilesName] = useState([]); // Name of the loaded PDF
     const [uploadStatus, setUploadStatus] = useState("idle"); // 'idle', 'uploading', 'success', 'error'
     const [isProcessing, setIsProcessing] = useState(false); // General loading state for API calls
     const [isPdfQuestion, setIsPdfQuestion] = useState(false); // Default to general question
+
+    // Add a new state to track the selected document
+    const [selectedChatDocument, setSelectedChatDocument] = useState(null);
 
     // --- Helper Functions ---
     const surpriseOptions = [
@@ -75,15 +79,36 @@ const App = () => {
 
             console.log("Upload successful:", data);
             setUploadStatus("success");
-            setPdfFileName(data.fileName); // Store the filename from response
+            // setPdfFileName(data.fileName); // Store the filename from response
             setSelectedFile(null); // Clear selected file after successful upload
             // Optionally clear chat history or add a system message
+
+            // setPdfFilesName(files => [...files, { fileName: data.fileName, checked: true }]);
+            // const name = pdfFilesName.filter(file => file.checked).map(file => file.fileName).join(", ");
+            // setPdfFileName(name);
+
+            setPdfFilesName((files) => {
+                const updatedFiles = [...files, { fileName: data.fileName, checked: true }];
+                let name = pdfFilesName.filter(file => file.checked).map(file => file.fileName).join(", ");
+
+                // Replace the last comma with " and"
+                const lastCommaIndex = name.lastIndexOf(",");
+
+                if (lastCommaIndex !== -1) {
+                    name = name.substring(0, lastCommaIndex) + " and" + name.substring(lastCommaIndex + 1);
+                }
+
+                setPdfFileName(name);
+
+                return updatedFiles;
+            });
+
             setChatHistory(oldHistory => [...oldHistory, { role: "system", parts: [{ text: `PDF '${data.fileName}' uploaded. You can now ask questions about it.` }] }]);
         } catch (err) {
             console.error("Upload failed:", err);
             setError(`Upload failed: ${err.message}`);
             setUploadStatus("error");
-            setPdfFileName(null); // Clear filename on error
+            // setPdfFileName(null); // Clear filename on error
         } finally {
             setIsProcessing(false); // Reset loading state
         }
@@ -107,6 +132,8 @@ const App = () => {
         const currentMessage = value; // Capture value before clearing
         setValue(""); // Clear input immediately for better UX
 
+        let selectedDocuments = pdfFilesName.filter(file => file.checked).map(file => file.fileName);
+
         try {
             const options = {
                 method: 'POST',
@@ -114,7 +141,8 @@ const App = () => {
                     history: chatHistory,
                     message: currentMessage, // Send the captured message
                     // --- Send the toggle state ---
-                    isPdfContextRequired: isPdfQuestion // Send boolean flag
+                    isPdfContextRequired: isPdfQuestion, // Send boolean flag
+                    selectedChatDocument: selectedDocuments // Send the selected document name
                 }),
                 headers: {
                     'Content-Type': "application/json"
@@ -136,11 +164,11 @@ const App = () => {
                 role: "user",
                 parts: [{ text: currentMessage }], // Use the captured message
             },
-                {
-                    role: "model",
-                    // Access the message property from the JSON response
-                    parts: [{ text: data.message }],
-                }
+            {
+                role: "model",
+                // Access the message property from the JSON response
+                parts: [{ text: data.message }],
+            }
             ]);
 
         } catch (err) {
@@ -151,9 +179,9 @@ const App = () => {
             setChatHistory(oldChatHistory => [...oldChatHistory, {
                 role: "user",
                 parts: [{ text: currentMessage }],
-            },{
+            }, {
                 role: "system",
-                parts: [{text: `Error getting response: ${err.message}`}]
+                parts: [{ text: `Error getting response: ${err.message}` }]
             }
             ]);
         } finally {
@@ -161,13 +189,48 @@ const App = () => {
         }
     };
 
-    const handleClearContext = async () => {
+    const handleDocumentSelection = (fileName) => {
+        setError(""); // Clear previous errors
+        setIsProcessing(true); // Set loading state
+        console.log("handleDocumentSelection", fileName);
+
+        const updatedFiles = pdfFilesName.map(file => {
+            if (file.fileName === fileName) {
+                return { ...file, checked: !file.checked }; // Toggle the checked state
+            }
+            return file;
+        });
+
+        setPdfFilesName(updatedFiles);
+
+        // const selectedFile = updatedFiles.find(file => file.fileName === fileName && file.checked);
+        // if (selectedFile) {
+        //     setSelectedChatDocument(selectedFile.fileName); // Set the selected document name
+        //     console.log("Selected document for chat:", selectedFile.fileName);
+        // } else {
+        //     setSelectedChatDocument(null); // Clear selection if no document is checked
+        //     console.log("No document selected for chat.");
+        // }
+
+        setIsProcessing(false); // Reset loading state
+        // setPdfFilesName((prevFiles) =>
+        //     prevFiles.map((file) =>
+        //         file === fileName ? { ...file, checked: !file.checked } : file
+        //     )
+        // );
+    };
+
+    const handleClearContext = async (fileNameToRemove) => {
         setError("");
         setIsProcessing(true);
         console.log("Clearing PDF context...");
         try {
             const response = await fetch('http://localhost:8000/clear-context', {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ fileName: fileNameToRemove }), // Send the filename to remove
             });
             const data = await response.json();
 
@@ -178,10 +241,13 @@ const App = () => {
             console.log("Clear context response:", data);
             setPdfFileName(null); // Clear the filename display
             setUploadStatus("idle");
-            // Optionally add a system message to chat history
-            setChatHistory(oldHistory => [...oldHistory, { role: "system", parts: [{ text: "PDF context cleared." }] }]);
 
-        } catch(err) {
+            // remove file from list
+            setPdfFilesName(files => files.filter(file => file.fileName !== fileNameToRemove));
+
+            setChatHistory(oldHistory => [...oldHistory, { role: "system", parts: [{ text: `PDF ${fileNameToRemove} has been removed` }] }]);
+
+        } catch (err) {
             console.error("Failed to clear context:", err);
             setError(`Failed to clear context: ${err.message}`);
         } finally {
@@ -195,6 +261,7 @@ const App = () => {
         setValue("");
         setError("");
         setChatHistory([]);
+        setPdfFilesName([]);
         setSelectedFile(null);
         setPdfFileName(null);
         setUploadStatus("idle");
@@ -214,7 +281,7 @@ const App = () => {
     // --- Rendering ---
     return (
         <div className="app">
-            <img src="./pdfWhisperer.jpg" alt="pdf whiseprer logo" className="logo"/>
+            <img src="./pdfWhisperer.jpg" alt="pdf whiseprer logo" className="logo" />
 
 
             {/* --- PDF Upload Section --- */}
@@ -237,14 +304,40 @@ const App = () => {
                 >
                     {uploadStatus === 'uploading' ? 'Uploading...' : 'Upload PDF'}
                 </button>
-                {pdfFileName && (
-                    <div className="pdf-status">
-                        <span>✅ Loaded: {pdfFileName}</span>
-                        <button onClick={handleClearContext} disabled={isProcessing} className="clear-context-button">
-                            Clear Context
-                        </button>
-                    </div>
-                )}
+                {
+                    pdfFilesName.map((file, index) => (
+                        <div className="pdf-status" key={index}>
+                            <span>
+                                <input
+                                    type="checkbox"
+                                    checked={file.checked}
+                                    onChange={() => handleDocumentSelection(file.fileName)}
+                                />
+                                Loaded: {file.fileName}
+                            </span>
+                            <button
+                                onClick={() => handleClearContext(file.fileName)}
+                                disabled={isProcessing}
+                                className="clear-context-button"
+                            >
+                                Remove document
+                            </button>
+                        </div>
+                    ))
+                }
+                {
+                    pdfFileName && (
+                        <h1>{pdfFileName}</h1>
+                    )
+                    // pdfFileName && (
+                    //     <div className="pdf-status">
+                    //         <span>✅ Loaded: {pdfFileName}</span>
+                    //         <button onClick={handleClearContext} disabled={isProcessing} className="clear-context-button">
+                    //             Clear Context
+                    //         </button>
+                    //     </div>
+                    // )
+                }
                 {uploadStatus === 'error' && !error && <p className="error-message">Upload failed. Please try again.</p>}
             </div>
 
@@ -275,7 +368,7 @@ const App = () => {
                             checked={isPdfQuestion}
                             // Prevent changing state if the control should be disabled (extra safety)
                             onChange={(e) => !isProcessing && pdfFileName && setIsPdfQuestion(e.target.checked)}
-                            // Disable the input itself, which helps accessibility and prevents interaction
+                        // Disable the input itself, which helps accessibility and prevents interaction
                         />
                         {/* This span will be styled as the switch track and knob */}
                         <span className="switch-slider"></span>
@@ -313,7 +406,7 @@ const App = () => {
 
                 <div className="search-result">
                     {/* Add a loading indicator for the response */}
-                    {isProcessing && chatHistory.length > 0 && chatHistory[chatHistory.length-1].role === 'user' && (
+                    {isProcessing && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'user' && (
                         <div className="loading-indicator">
                             <p><strong>Model:</strong> Thinking...</p>
                         </div>
