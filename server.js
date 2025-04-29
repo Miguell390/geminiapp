@@ -23,7 +23,17 @@ let pdfFileName = null; // Optional: Store the filename
 
 // --- Multer Configuration for File Uploads ---
 // We'll use memory storage for simplicity. For large PDFs, consider disk storage.
-const storage = multer.memoryStorage();
+// const storage = multer.memoryStorage();
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/'); // <-- Directory to save files (make sure it exists)
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + '-' + file.originalname); // Save with a unique name
+    }
+});
+
 const upload = multer({
     storage: storage,
     limits: { fileSize: 10 * 1024 * 1024 }, // Example: Limit PDF size to 10MB
@@ -35,6 +45,15 @@ const upload = multer({
         }
     }
 });
+
+// if uploads dir not exist -> create new
+const uploadsDbFile = 'database.json';
+
+// Load previous uploads
+let uploadedFiles = [];
+if (fs.existsSync(uploadsDbFile)) {
+    uploadedFiles = JSON.parse(fs.readFileSync(uploadsDbFile));
+}
 
 // --- Gemini API Initialization ---
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEN_AI_KEY);
@@ -52,13 +71,30 @@ app.post('/upload-pdf', upload.single('pdfFile'), async (req, res) => {
     }
 
     try {
-        console.log(`Processing PDF: ${req.file.originalname}`);
+        console.log(`Processing PDF: ${req.file.originalname}`, req.file);
         // pdf-parse works with the buffer directly from memoryStorage
-        const data = await pdf(req.file.buffer);
+        const fileContent = fs.readFileSync(req.file.path);
+        // const data = await pdf(req.file.buffer);
+        const data = await pdf(fileContent);
+
+        console.log("data:\n", data);
 
         // Store the extracted text globally (replace with better storage if needed)
         pdfTextContext = data.text;
         pdfFileName = req.file.originalname; // Store the name
+
+        // save file in uploadedFiles
+        const fileInfo = {
+            // pdfFileName: pdfFileName,
+            path: req.file.path,
+            originalname: req.file.originalname,
+            uploadTime: new Date(),
+            pdfTextContext: pdfTextContext
+        };
+
+        // Save file info to memory
+        uploadedFiles.push(fileInfo);
+        fs.writeFileSync(uploadsDbFile, JSON.stringify(uploadedFiles, null, 2));
 
         console.log(`Successfully processed ${pdfFileName}. Text length: ${pdfTextContext.length}`);
         res.send({
@@ -76,39 +112,81 @@ app.post('/upload-pdf', upload.single('pdfFile'), async (req, res) => {
 });
 
 // Endpoint to Clear PDF Context
-app.post('/clear-context', (req, res) => {
+app.post('/clear-context', async (req, res) => {
     console.log('Clearing PDF context.');
+    console.log("pdfFileName:\n", pdfFileName);
+    console.log("\npdfTextContext:\n", pdfTextContext);
+    console.log("\npdfToRemove:\n", req.body.fileName);
+
     pdfTextContext = null;
     pdfFileName = null;
+    // uploadedFiles = [];
+    const removeFile = uploadedFiles.find(file => file.originalname === req.body.fileName);
+    uploadedFiles = uploadedFiles.filter(file => file.originalname !== req.body.fileName);
+    fs.writeFileSync(uploadsDbFile, JSON.stringify(uploadedFiles, null, 2)); // Clear the file info
+
+    try {
+        const dir = removeFile.path;
+        await fs.promises.rm(dir, { recursive: true, force: true });
+        console.log(`Cleared all contents in: ${dir}`);
+    } catch (err) {
+        console.error(`Error clearing directory: ${err}`);
+    }
+
     res.send({ message: 'PDF context cleared.' });
 });
 
 // Endpoint for Chatting with Gemini (potentially using PDF context)
 app.post('/gemini', async (req, res) => {
     try {
-        const { history, message } = req.body;
+        const { history, message, selectedChatDocument } = req.body;
 
         if (!message) {
             return res.status(400).send({ message: 'Message cannot be empty.' });
         }
 
+        console.log("Received message:", selectedChatDocument);
+
         // --- Context Injection ---
         let prompt = message; // Start with the original user message
 
-        if (pdfTextContext) {
+        if (pdfTextContext || selectedChatDocument.length > 0) {
             // Construct a prompt that explicitly tells the model to use the context
-            prompt = `
-Based *only* on the following text content extracted from the document '${pdfFileName || 'provided'}', please answer the user's question.
-If the answer cannot be found in the text, state that clearly. Do not use any prior knowledge outside of this document context.
 
+            prompt = "";
+            if (selectedChatDocument.length == 1) {
+                prompt = `Based *only* on the following text content extracted from the document '${selectedChatDocument[0] || 'provided'}', please answer the user's question.`;
+            }
+            else {
+                prompt = `Based *only* on the following text content extracted from the documents '${selectedChatDocument.join(', ')}', please answer the user's question.`;
+            }
+
+            prompt += `
+If the answer cannot be found in the text, state that clearly. Do not use any prior knowledge outside of this document context.`;
+
+            for (let index = 0; index < selectedChatDocument.length; index++) {
+                const file = selectedChatDocument[index];
+                // get file content from uploadedFiles
+                const fileContent = uploadedFiles.find(uploadedFile => uploadedFile.originalname === file);
+                if (fileContent) {
+                    prompt += `
+--- DOCUMENT TITLE START ---
+${fileContent.originalname}
+--- DOCUMENT TITLE END ---
 --- DOCUMENT CONTENT START ---
-${pdfTextContext}
+${fileContent.pdfTextContext}
 --- DOCUMENT CONTENT END ---
+`;
+                    console.log(`Using PDF context from ${fileContent.originalname} for the prompt.`);
+                }
+            }
 
+            prompt += `
 User Question: "${message}"
 
 Answer:`;
-            console.log(`Using PDF context from ${pdfFileName} for the prompt.`);
+            // console.log(`Using PDF context from ${pdfFileName} for the prompt.`);
+            console.log("prompt:\n", prompt.substring(0, 200) + "..."); // Log truncated prompt
         } else {
             console.log("No PDF context loaded, using standard chat.");
             // Optional: You might want to prevent PDF-specific questions if no PDF is loaded
