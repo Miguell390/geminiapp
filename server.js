@@ -36,12 +36,6 @@ const upload = multer({
     }
 });
 
-// --- Gemini API Initialization ---
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEN_AI_KEY);
-// Choose a model that supports larger context windows if needed, e.g., gemini-1.5-flash
-// Check Gemini documentation for latest model capabilities and context limits.
-// gemini-pro might have limitations on context length. gemini-1.5-flash or pro often better.
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" }); // Updated model suggestion
 
 // --- API Endpoints ---
 
@@ -83,69 +77,93 @@ app.post('/clear-context', (req, res) => {
     res.send({ message: 'PDF context cleared.' });
 });
 
-// Endpoint for Chatting with Gemini (potentially using PDF context)
+
+// --- START OF FILE server.js --- // (Make sure other parts are as per previous step)
+
+// ... (other requires, app setup, PDF storage, multer, Gemini init remain the same) ...
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEN_AI_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" }); // Use this initialized model
+
+
+// ... (upload-pdf and clear-context endpoints remain the same) ...
+
+
+// --- CORRECTED Endpoint for Chatting with Gemini ---
 app.post('/gemini', async (req, res) => {
+    // REMOVE THE CONFLICTING BLOCK THAT WAS HERE
+
+    // --- Start directly with the intended logic ---
     try {
-        const { history, message } = req.body;
+        // Get data from request body
+        const { history, message, isPdfContextRequired } = req.body; // Get the toggle flag
 
         if (!message) {
             return res.status(400).send({ message: 'Message cannot be empty.' });
         }
 
-        // --- Context Injection ---
-        let prompt = message; // Start with the original user message
+        let prompt = ""; // Initialize prompt string
+        let usingContext = false; // Flag (optional for logging)
 
-        if (pdfTextContext) {
-            // Construct a prompt that explicitly tells the model to use the context
-            prompt = `
-Based *only* on the following text content extracted from the document '${pdfFileName || 'provided'}', please answer the user's question.
-If the answer cannot be found in the text, state that clearly. Do not use any prior knowledge outside of this document context.
+        // Conditional Logic based on the toggle
+        if (isPdfContextRequired) {
+            console.log("Attempting to use PDF context...");
+            if (pdfTextContext) {
+                // Construct the prompt WITH PDF context
+                prompt = `
+                    Based *only* on the following text content extracted from the document '${pdfFileName || 'provided'}', please answer the user's question.
+                    If the answer cannot be found in the text, state that clearly ("Based on the provided document text, I cannot answer this question.").
+                    Do not use any prior knowledge outside of this document context. Do not mention the document structure unless asked.
 
---- DOCUMENT CONTENT START ---
-${pdfTextContext}
---- DOCUMENT CONTENT END ---
+                    --- DOCUMENT CONTENT START ---
+                    ${pdfTextContext}
+                    --- DOCUMENT CONTENT END ---
 
-User Question: "${message}"
+                    User Question: "${message}"
 
-Answer:`;
-            console.log(`Using PDF context from ${pdfFileName} for the prompt.`);
+                    Answer:`;
+                console.log(`Using PDF context from ${pdfFileName} for the prompt.`);
+                usingContext = true;
+            } else {
+                // User wants PDF context, but it's not loaded
+                console.warn("User requested PDF context, but none is loaded.");
+                return res.status(400).send({ message: `You asked a question about the PDF, but no PDF context is currently loaded. Please upload a PDF first or toggle off the 'Ask about PDF' option.` });
+            }
         } else {
-            console.log("No PDF context loaded, using standard chat.");
-            // Optional: You might want to prevent PDF-specific questions if no PDF is loaded
-            // if (message.toLowerCase().includes("document") || message.toLowerCase().includes("pdf")) {
-            //     return res.send("Please upload a PDF document first before asking questions about it.");
-            // }
+            // General question - use the message directly as the prompt
+            prompt = message;
+            // You could potentially add *curated* history here if needed for general chat context,
+            // ensuring no "system" roles are included and formatting it correctly for generateContent.
+            // For now, just sending the message is simplest.
+            console.log("Processing as a general question (no PDF context).");
         }
 
-        // Use the model directly with generateContent for potentially simpler context handling
-        // startChat might be tricky if context changes between turns.
-        // For RAG, often sending context + question in one go is easier.
+        // Simplified call to Gemini using generateContent with the constructed prompt string
+        console.log("Sending to Gemini:", prompt.substring(0, 300) + "..."); // Log truncated prompt
 
-        // Construct the history format suitable for generateContent if needed
-        // Simplified: Just send the current prompt (with or without context)
-        // For more complex history + RAG, you might need to curate the history sent to the API
-
-        console.log("Sending to Gemini:", prompt.substring(0, 200) + "..."); // Log truncated prompt
-
-        const result = await model.generateContent(prompt); // Send the potentially augmented prompt
+        // Use the globally initialized model
+        const result = await model.generateContent(prompt); // Send ONLY the string prompt
         const response = await result.response;
         const text = response.text();
 
-        console.log("Gemini Response:", text.substring(0, 200) + "..."); // Log truncated response
-        res.send({ message: text }); // Send back as an object for consistency
+        console.log("Gemini Response:", text.substring(0, 200) + "...");
+        res.send({ message: text }); // Send back as an object
 
     } catch (error) {
         console.error('Error communicating with Gemini:', error);
-        // Attempt to parse potential Gemini API errors
         let errorMessage = 'An error occurred with the Gemini API.';
-        if (error.response && error.response.data && error.response.data.error) {
-            errorMessage = `Gemini API Error: ${error.response.data.error.message}`;
-        } else if (error.message) {
-            errorMessage = error.message;
+        // Attempt to get more specific error message if available
+        if (error.message) {
+             errorMessage = error.message;
+             // Check if it's the specific system role error to provide clearer feedback maybe
+             if (error.message.includes("system role is not supported")) {
+                 errorMessage = "An internal error occurred. The AI model doesn't support 'system' messages in the history."
+                 // This shouldn't happen now, but good for debugging
+             }
         }
         res.status(500).send({ message: errorMessage });
     }
 });
+
 
 // --- Error Handler for Multer ---
 app.use((err, req, res, next) => {

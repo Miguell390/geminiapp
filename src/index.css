@@ -134,3 +134,125 @@ h1 { text-align: center; color: #333; }
 .chat-entry p { margin: 0; word-wrap: break-word; }
 .chat-entry strong { color: #333; }
 .loading-indicator { text-align: center; color: #888; padding: 10px;}
+
+
+
+/* --- Styles for the Enhanced Toggle Switch --- */
+
+.toggle-container {
+    margin-bottom: 15px; /* Increased margin slightly */
+    padding: 10px;
+    background-color: #f8f9fa; /* Light background */
+    border: 1px solid #e9ecef; /* Softer border */
+    border-radius: 6px;
+    font-size: 0.95em; /* Slightly larger text */
+}
+
+/* The main label acting as the switch container */
+.switch-label {
+    position: relative; /* Needed for absolute positioning of the input */
+    display: inline-flex; /* Align items horizontally */
+    align-items: center;
+    cursor: pointer;
+    user-select: none; /* Prevent text selection on click */
+    color: #333;
+}
+
+/* Style the label when the switch is disabled */
+.switch-label.disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Hide the actual checkbox input visually but keep it accessible */
+.switch-label input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none; /* Should not be interactive directly */
+}
+
+/* The track of the switch */
+.switch-slider {
+    position: relative;
+    display: inline-block;
+    width: 44px; /* Width of the switch track */
+    height: 24px; /* Height of the switch track */
+    background-color: #ccc; /* Default background (off state) */
+    border-radius: 34px; /* Fully rounded ends */
+    transition: background-color 0.3s ease;
+    margin-right: 10px; /* Space between switch and text */
+    flex-shrink: 0; /* Prevent switch from shrinking */
+}
+
+/* The knob (circle) of the switch */
+.switch-slider::before {
+    content: "";
+    position: absolute;
+    height: 18px; /* Size of the knob */
+    width: 18px;  /* Size of the knob */
+    left: 3px;    /* Initial position (off state) */
+    bottom: 3px;  /* Initial position (off state) */
+    background-color: white;
+    border-radius: 50%; /* Make it a circle */
+    transition: transform 0.3s ease; /* Animate the movement */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* When the hidden checkbox is checked, change the slider's background */
+.switch-label input:checked + .switch-slider {
+    background-color: #28a745; /* Active color (e.g., green) */
+}
+
+/* When the hidden checkbox is checked, move the knob */
+.switch-label input:checked + .switch-slider::before {
+    /* Move knob to the right: width - knob_width - left_offset */
+    transform: translateX(20px); /* 44px - 18px - 3px - 3px approx */
+}
+
+/* Focus styles for accessibility - apply to the slider when the hidden input is focused */
+.switch-label input:focus-visible + .switch-slider {
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5); /* Example focus ring */
+}
+
+
+/* Style the text next to the switch */
+.switch-text {
+    line-height: 24px; /* Align vertically with the switch */
+    color: #343a40;
+}
+
+/* Style the filename part specifically */
+.switch-filename {
+    font-weight: bold;
+    color: #0056b3; /* Make filename stand out slightly */
+    /* Prevent long filenames from breaking layout */
+    display: inline-block;
+    max-width: 250px; /* Adjust as needed */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom; /* Align better with surrounding text */
+}
+
+/* Style for the helper text below the switch */
+.switch-helper-text {
+    display: block; /* Place it on a new line */
+    font-size: 0.8em;
+    color: #6c757d; /* Grey color */
+    margin-top: 5px;
+    margin-left: 54px; /* Indent roughly under the text */
+}
+
+/* Disabled state styles adjustments */
+.switch-label.disabled .switch-slider {
+    background-color: #e0e0e0; /* Lighter grey when disabled */
+}
+
+.switch-label.disabled .switch-text {
+    color: #888; /* Grey out text when disabled */
+}
+.switch-label.disabled .switch-filename {
+    color: #999;
+}
