@@ -92,72 +92,12 @@ app.post('/gemini', async (req, res) => {
             return res.status(400).send({ message: 'Message cannot be empty.' });
         }
 
-        let responseText = ""; // Variable to hold the final text to send back
+        // --- Context Injection ---
+        let prompt = message; // Start with the original user message
 
-        // --- Check if it's an Update Request (Only if context exists) ---
-        // Simple keyword detection (can be improved with more sophisticated NLP/LLM check)
-        const isUpdateRequest = pdfTextContext && (
-            message.toLowerCase().includes('update ') ||
-            message.toLowerCase().includes('change ') ||
-            message.toLowerCase().includes('modify ') ||
-            message.toLowerCase().includes('correct ') ||
-            message.toLowerCase().includes('replace ') ||
-            message.toLowerCase().includes('edit ')
-            // Add more keywords if needed
-        );
-
-        if (isUpdateRequest) {
-            console.log(`Attempting context update based on: "${message}"`);
-
-            // *** Step 1: Construct the Update Prompt for Gemini ***
-            const updatePrompt = `
-You are an AI assistant performing an inline edit on the following document text based on the user's instruction.
-Read the user's request and the current document text carefully.
-Apply the requested change directly within the text.
-IMPORTANT: Respond with ONLY the complete, full text of the document *after* applying the change. Do not include any explanations, apologies, greetings, or markdown formatting like \`\`\` around the text. Just output the raw, modified, full text content.
-
---- CURRENT DOCUMENT TEXT START ---
-${pdfTextContext}
---- CURRENT DOCUMENT TEXT END ---
-
---- USER'S UPDATE REQUEST ---
-"${message}"
-
---- FULL MODIFIED DOCUMENT TEXT (Return only this) ---
-`;
-
-            try {
-                // *** Step 2: Send Update Request to Gemini ***
-                const result = await model.generateContent(updatePrompt);
-                const response = await result.response;
-                const updatedText = response.text();
-
-                // Basic validation: Check if the response seems like valid text
-                if (updatedText && updatedText.trim().length > 0) {
-                    // *** Step 3: Update Server Context ***
-                    pdfTextContext = updatedText; // CRITICAL: Update the in-memory context
-                    console.log(`Context updated successfully. New length: ${pdfTextContext.length}`);
-                    // *** Step 4: Prepare Confirmation Message ***
-                    responseText = `OK, I've updated the document context based on your request. You can ask follow-up questions about the modified content.`;
-                } else {
-                    console.warn("Gemini response for update seemed empty or invalid.");
-                    responseText = "Sorry, I received an unexpected response while trying to update the context. Please try rephrasing your request.";
-                }
-
-            } catch (updateError) {
-                console.error('Error during Gemini context update:', updateError);
-                responseText = "Sorry, I encountered an error while trying to update the context. Please try again later.";
-                // Potentially send a 500 status if the update fails critically
-                // return res.status(500).send({ message: responseText });
-            }
-
-        } else {
-            // --- Standard Q&A Flow (Not an Update Request) ---
-            let prompt = message; // Start with the original user message
-
-            if (pdfTextContext) {
-                // Construct the RAG prompt (as you had before)
-                prompt = `
+        if (pdfTextContext) {
+            // Construct a prompt that explicitly tells the model to use the context
+            prompt = `
 Based *only* on the following text content extracted from the document '${pdfFileName || 'provided'}', please answer the user's question.
 If the answer cannot be found in the text, state that clearly. Do not use any prior knowledge outside of this document context.
 
@@ -168,25 +108,36 @@ ${pdfTextContext}
 User Question: "${message}"
 
 Answer:`;
-                console.log(`Using PDF context from ${pdfFileName} for the prompt.`);
-            } else {
-                console.log("No PDF context loaded, using standard chat.");
-                // Optional check: prevent PDF-specific questions if no PDF loaded
-            }
-
-            console.log("Sending Q&A to Gemini:", prompt.substring(0, 200) + "...");
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            responseText = response.text(); // Get the answer
-            console.log("Gemini Q&A Response:", responseText.substring(0, 200) + "...");
+            console.log(`Using PDF context from ${pdfFileName} for the prompt.`);
+        } else {
+            console.log("No PDF context loaded, using standard chat.");
+            // Optional: You might want to prevent PDF-specific questions if no PDF is loaded
+            // if (message.toLowerCase().includes("document") || message.toLowerCase().includes("pdf")) {
+            //     return res.send("Please upload a PDF document first before asking questions about it.");
+            // }
         }
 
-        // Send the final response (either confirmation or answer)
-        res.send({ message: responseText });
+        // Use the model directly with generateContent for potentially simpler context handling
+        // startChat might be tricky if context changes between turns.
+        // For RAG, often sending context + question in one go is easier.
+
+        // Construct the history format suitable for generateContent if needed
+        // Simplified: Just send the current prompt (with or without context)
+        // For more complex history + RAG, you might need to curate the history sent to the API
+
+        console.log("Sending to Gemini:", prompt.substring(0, 200) + "..."); // Log truncated prompt
+
+        const result = await model.generateContent(prompt); // Send the potentially augmented prompt
+        const response = await result.response;
+        const text = response.text();
+
+        console.log("Gemini Response:", text.substring(0, 200) + "..."); // Log truncated response
+        res.send({ message: text }); // Send back as an object for consistency
 
     } catch (error) {
-        console.error('Error in /gemini endpoint:', error);
-        let errorMessage = 'An error occurred processing your request.';
+        console.error('Error communicating with Gemini:', error);
+        // Attempt to parse potential Gemini API errors
+        let errorMessage = 'An error occurred with the Gemini API.';
         if (error.response && error.response.data && error.response.data.error) {
             errorMessage = `Gemini API Error: ${error.response.data.error.message}`;
         } else if (error.message) {
