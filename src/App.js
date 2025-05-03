@@ -17,6 +17,9 @@ const App = () => {
     // Add a new state to track the selected document
     const [selectedChatDocument, setSelectedChatDocument] = useState(null);
 
+    // Add a new state to track the selected document
+    const [selectedChatDocument, setSelectedChatDocument] = useState(null);
+
     // --- Helper Functions ---
     const surpriseOptions = [
         'What is the most famous pokemon?',
