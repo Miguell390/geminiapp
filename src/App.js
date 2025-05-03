@@ -142,7 +142,7 @@ const App = () => {
         }
 
         // --- Check if asking PDF question without PDF loaded ---
-        if (isPdfQuestion && !pdfFileName) {
+        if (isPdfQuestion && !pdfFilesName) {
             setError("Error: No PDF is loaded. Please upload a PDF or switch the toggle to ask a general question.");
             return;
         }
@@ -380,14 +380,14 @@ const App = () => {
 
                 <div className="toggle-container">
                     {/* Use label for accessibility, associate with input via htmlFor/id */}
-                    <label htmlFor="pdf-toggle" className={`switch-label ${!pdfFileName || isProcessing ? 'disabled' : ''}`}>
+                    <label htmlFor="pdf-toggle" className={`switch-label ${!pdfFilesName || isProcessing ? 'disabled' : ''}`}>
                         {/* Hidden actual checkbox that holds the state */}
                         <input
                             type="checkbox"
                             id="pdf-toggle"
                             checked={isPdfQuestion}
                             // Prevent changing state if the control should be disabled (extra safety)
-                            onChange={(e) => !isProcessing && pdfFileName && setIsPdfQuestion(e.target.checked)}
+                            onChange={(e) => !isProcessing && pdfFilesName && setIsPdfQuestion(e.target.checked)}
                         // Disable the input itself, which helps accessibility and prevents interaction
                         />
                         {/* This span will be styled as the switch track and knob */}

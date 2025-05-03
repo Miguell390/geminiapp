@@ -137,52 +137,53 @@ app.post('/gemini', async (req, res) => {
 
         // --- Context Injection ---
         let prompt = message; // Start with the original user message
+        let usingContext = false; // Flag (optional for logging)
 
-        if (pdfTextContext || selectedChatDocument.length > 0) {
-            // Construct a prompt that explicitly tells the model to use the context
-
-            prompt = "";
-            if (selectedChatDocument.length == 1) {
-                prompt = `Based *only* on the following text content extracted from the document '${selectedChatDocument[0] || 'provided'}', please answer the user's question.`;
-            }
-            else {
-                prompt = `Based *only* on the following text content extracted from the documents '${selectedChatDocument.join(', ')}', please answer the user's question.`;
-            }
-
-            prompt += `
-If the answer cannot be found in the text, state that clearly. Do not use any prior knowledge outside of this document context.`;
-
-            for (let index = 0; index < selectedChatDocument.length; index++) {
-                const file = selectedChatDocument[index];
-                // get file content from uploadedFiles
-                const fileContent = uploadedFiles.find(uploadedFile => uploadedFile.originalname === file);
-                if (fileContent) {
-                    prompt += `
---- DOCUMENT TITLE START ---
-${fileContent.originalname}
---- DOCUMENT TITLE END ---
---- DOCUMENT CONTENT START ---
-${fileContent.pdfTextContext}
---- DOCUMENT CONTENT END ---
-`;
-                    console.log(`Using PDF context from ${fileContent.originalname} for the prompt.`);
+        // Conditional Logic based on the toggle
+        if (isPdfContextRequired) {
+            console.log("Attempting to use PDF context...");
+            if (pdfTextContext || selectedChatDocument.length > 0) {
+                // Construct a prompt that explicitly tells the model to use the context
+    
+                prompt = "";
+                if (selectedChatDocument.length == 1) {
+                    prompt = `Based *only* on the following text content extracted from the document '${selectedChatDocument[0] || 'provided'}', please answer the user's question.`;
                 }
+                else {
+                    prompt = `Based *only* on the following text content extracted from the documents '${selectedChatDocument.join(', ')}', please answer the user's question.`;
+                }
+    
+                prompt += `If the answer cannot be found in the text, state that clearly. Do not use any prior knowledge outside of this document context.`;
+    
+                for (let index = 0; index < selectedChatDocument.length; index++) {
+                    const file = selectedChatDocument[index];
+                    // get file content from uploadedFiles
+                    const fileContent = uploadedFiles.find(uploadedFile => uploadedFile.originalname === file);
+                    if (fileContent) {
+                        prompt += `
+                            --- DOCUMENT TITLE START ---
+                            ${fileContent.originalname}
+                            --- DOCUMENT TITLE END ---
+                            --- DOCUMENT CONTENT START ---
+                            ${fileContent.pdfTextContext}
+                            --- DOCUMENT CONTENT END ---
+                            `;
+                        console.log(`Using PDF context from ${fileContent.originalname} for the prompt.`);
+                    }
+                }
+    
+                prompt += `User Question: "${message}"Answer:`;
+                // console.log(`Using PDF context from ${pdfFileName} for the prompt.`);
+                console.log("prompt:\n", prompt.substring(0, 200) + "..."); // Log truncated prompt
+                usingContext = true;
             }
-
-            prompt += `
-User Question: "${message}"
-
-Answer:`;
-            // console.log(`Using PDF context from ${pdfFileName} for the prompt.`);
-            console.log("prompt:\n", prompt.substring(0, 200) + "..."); // Log truncated prompt
-
         } else {
             // General question - use the message directly as the prompt
             prompt = message;
             console.log("Processing as a general question (no PDF context).");
         }
 
-        console.log("Sending to Gemini:", prompt.substring(0, 300) + "..."); // Log truncated prompt
+                console.log("Sending to Gemini:", prompt.substring(0, 300) + "..."); // Log truncated prompt
 
         // Use the globally initialized model
         const result = await model.generateContent(prompt); // Send ONLY the string prompt
