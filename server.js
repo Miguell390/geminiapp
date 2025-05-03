@@ -13,16 +13,9 @@ app.use(express.json());
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// --- PDF Context Storage (Simple In-Memory) ---
-// WARNING: This stores only ONE PDF context globally for the entire server.
-// This is okay for a simple demo or single-user scenario.
-// For multi-user applications, you'll need a more sophisticated approach
-// (e.g., using session IDs, user IDs to map context).
 let pdfTextContext = null;
 let pdfFileName = null; // Optional: Store the filename
 
-// --- Multer Configuration for File Uploads ---
-// We'll use memory storage for simplicity. For large PDFs, consider disk storage.
 const storage = multer.memoryStorage();
 const upload = multer({
     storage: storage,
@@ -35,9 +28,6 @@ const upload = multer({
         }
     }
 });
-
-
-// --- API Endpoints ---
 
 // Endpoint to Upload and Process PDF
 app.post('/upload-pdf', upload.single('pdfFile'), async (req, res) => {
@@ -78,21 +68,11 @@ app.post('/clear-context', (req, res) => {
 });
 
 
-// --- START OF FILE server.js --- // (Make sure other parts are as per previous step)
-
-// ... (other requires, app setup, PDF storage, multer, Gemini init remain the same) ...
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEN_AI_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" }); // Use this initialized model
 
-
-// ... (upload-pdf and clear-context endpoints remain the same) ...
-
-
 // --- CORRECTED Endpoint for Chatting with Gemini ---
 app.post('/gemini', async (req, res) => {
-    // REMOVE THE CONFLICTING BLOCK THAT WAS HERE
-
-    // --- Start directly with the intended logic ---
     try {
         // Get data from request body
         const { history, message, isPdfContextRequired } = req.body; // Get the toggle flag
@@ -131,13 +111,9 @@ app.post('/gemini', async (req, res) => {
         } else {
             // General question - use the message directly as the prompt
             prompt = message;
-            // You could potentially add *curated* history here if needed for general chat context,
-            // ensuring no "system" roles are included and formatting it correctly for generateContent.
-            // For now, just sending the message is simplest.
             console.log("Processing as a general question (no PDF context).");
         }
 
-        // Simplified call to Gemini using generateContent with the constructed prompt string
         console.log("Sending to Gemini:", prompt.substring(0, 300) + "..."); // Log truncated prompt
 
         // Use the globally initialized model
