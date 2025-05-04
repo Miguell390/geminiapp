@@ -82,7 +82,7 @@ const App = () => {
             // Optionally clear chat history or add a system message
             setPdfFilesName((files) => {
                 const updatedFiles = [...files, { fileName: data.fileName, checked: true }];
-                let name = pdfFilesName.filter(file => file.checked).map(file => file.fileName).join(", ");
+                let name = updatedFiles.filter(file => file.checked).map(file => file.fileName).join(", ");
 
                 // Replace the last comma with " and"
                 const lastCommaIndex = name.lastIndexOf(",");
