@@ -12,9 +12,11 @@ const App = () => {
     const [pdfFilesName, setPdfFilesName] = useState([]); // Name of the loaded PDF
     const [uploadStatus, setUploadStatus] = useState("idle"); // 'idle', 'uploading', 'success', 'error'
     const [isProcessing, setIsProcessing] = useState(false); // General loading state for API calls
+    const [isPdfQuestion, setIsPdfQuestion] = useState(false); // Default to general question
 
     // Add a new state to track the selected document
     const [selectedChatDocument, setSelectedChatDocument] = useState(null);
+
 
     // --- Helper Functions ---
     const surpriseOptions = [
@@ -130,6 +132,12 @@ const App = () => {
             return;
         }
 
+        // --- Check if asking PDF question without PDF loaded ---
+        if (isPdfQuestion && !pdfFilesName) {
+            setError("Error: No PDF is loaded. Please upload a PDF or switch the toggle to ask a general question.");
+            return;
+        }
+
         setError(""); // Clear previous errors
         setIsProcessing(true); // Set loading state
         const currentMessage = value; // Capture value before clearing
@@ -142,7 +150,9 @@ const App = () => {
                 method: 'POST',
                 body: JSON.stringify({
                     history: chatHistory,
-                    message: currentMessage, // Send the captured message
+                    message: currentMessage, // Send the captured message<<<<<<< HEAD
+                    // --- Send the toggle state ---
+                    isPdfContextRequired: isPdfQuestion, // Send boolean flag
                     selectedChatDocument: selectedDocuments // Send the selected document name
                 }),
                 headers: {
@@ -355,6 +365,36 @@ const App = () => {
                         {!pdfFileName ? "Surprise Me (General)" : "Suggest Question"}
                     </button>
                 </p>
+
+
+                <div className="toggle-container">
+                    {/* Use label for accessibility, associate with input via htmlFor/id */}
+                    <label htmlFor="pdf-toggle" className={`switch-label ${!pdfFilesName || isProcessing ? 'disabled' : ''}`}>
+                        {/* Hidden actual checkbox that holds the state */}
+                        <input
+                            type="checkbox"
+                            id="pdf-toggle"
+                            checked={isPdfQuestion}
+                            // Prevent changing state if the control should be disabled (extra safety)
+                            onChange={(e) => !isProcessing && pdfFilesName && setIsPdfQuestion(e.target.checked)}
+                        // Disable the input itself, which helps accessibility and prevents interaction
+                        />
+                        {/* This span will be styled as the switch track and knob */}
+                        <span className="switch-slider"></span>
+                        {/* Text describing the toggle's purpose */}
+                        <span className="switch-text">
+                            {pdfFileName
+                                ? <>Use context from: <span className="switch-filename" title={pdfFileName}>{pdfFileName}</span></>
+                                : 'Use PDF Context (Upload PDF first)'}
+                        </span>
+                    </label>
+                    {/* Optional: Add a small helper text explaining the states */}
+                    {pdfFileName && (
+                        <span className="switch-helper-text">
+                            (Toggle ON to ask about the PDF, OFF for general questions)
+                        </span>
+                    )}
+                </div>
 
                 <div className="input-container">
                     <input

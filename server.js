@@ -13,11 +13,6 @@ app.use(express.json());
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// --- PDF Context Storage (Simple In-Memory) ---
-// WARNING: This stores only ONE PDF context globally for the entire server.
-// This is okay for a simple demo or single-user scenario.
-// For multi-user applications, you'll need a more sophisticated approach
-// (e.g., using session IDs, user IDs to map context).
 let pdfTextContext = null;
 let pdfFileName = null; // Optional: Store the filename
 
@@ -62,7 +57,14 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEN_AI_KEY);
 // gemini-pro might have limitations on context length. gemini-1.5-flash or pro often better.
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" }); // Updated model suggestion
 
-// --- API Endpoints ---
+// if uploads dir not exist -> create new
+const uploadsDbFile = 'database.json';
+
+// Load previous uploads
+let uploadedFiles = [];
+if (fs.existsSync(uploadsDbFile)) {
+    uploadedFiles = JSON.parse(fs.readFileSync(uploadsDbFile));
+}
 
 // Endpoint to Upload and Process PDF
 app.post('/upload-pdf', upload.single('pdfFile'), async (req, res) => {
@@ -141,9 +143,6 @@ app.post('/clear-context', async (req, res) => {
 
 // --- CORRECTED Endpoint for Chatting with Gemini ---
 app.post('/gemini', async (req, res) => {
-    // REMOVE THE CONFLICTING BLOCK THAT WAS HERE
-
-    // --- Start directly with the intended logic ---
     try {
         // Get data from request body
         const { history, message, isPdfContextRequired, selectedChatDocument } = req.body; // Get the toggle flag
@@ -152,7 +151,10 @@ app.post('/gemini', async (req, res) => {
             return res.status(400).send({ message: 'Message cannot be empty.' });
         }
 
-        let prompt = ""; // Initialize prompt string
+        console.log("Received message:", selectedChatDocument);
+
+        // --- Context Injection ---
+        let prompt = message; // Start with the original user message
         let usingContext = false; // Flag (optional for logging)
 
         console.log("Received message:", selectedChatDocument);
@@ -161,7 +163,6 @@ app.post('/gemini', async (req, res) => {
             console.log("Attempting to use PDF context...");
             if (pdfTextContext || selectedChatDocument.length > 0) {
                 // Construct a prompt that explicitly tells the model to use the context
-
                 prompt = "";
                 if (selectedChatDocument.length == 1) {
                     prompt = `Based *only* on the following text content extracted from the document '${selectedChatDocument[0] || 'provided'}', please answer the user's question.`;
@@ -209,13 +210,9 @@ Answer:`;
         } else {
             // General question - use the message directly as the prompt
             prompt = message;
-            // You could potentially add *curated* history here if needed for general chat context,
-            // ensuring no "system" roles are included and formatting it correctly for generateContent.
-            // For now, just sending the message is simplest.
             console.log("Processing as a general question (no PDF context).");
         }
 
-        // Simplified call to Gemini using generateContent with the constructed prompt string
         console.log("Sending to Gemini:", prompt.substring(0, 300) + "..."); // Log truncated prompt
 
         // Use the globally initialized model
