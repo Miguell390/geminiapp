@@ -80,33 +80,6 @@ const App = () => {
             // setPdfFileName(data.fileName); // Store the filename from response
             setSelectedFile(null); // Clear selected file after successful upload
             // Optionally clear chat history or add a system message
-
-            // setPdfFilesName(files => [...files, { fileName: data.fileName, checked: true }]);
-            // const name = pdfFilesName.filter(file => file.checked).map(file => file.fileName).join(", ");
-            // setPdfFileName(name);
-
-            setPdfFilesName((files) => {
-                const updatedFiles = [...files, { fileName: data.fileName, checked: true }];
-                let name = pdfFilesName.filter(file => file.checked).map(file => file.fileName).join(", ");
-
-                // Replace the last comma with " and"
-                const lastCommaIndex = name.lastIndexOf(",");
-
-                if (lastCommaIndex !== -1) {
-                    name = name.substring(0, lastCommaIndex) + " and" + name.substring(lastCommaIndex + 1);
-                }
-
-                setPdfFileName(name);
-
-                return updatedFiles;
-            });
-
-            setChatHistory(oldHistory => [...oldHistory, { role: "system", parts: [{ text: `PDF '${data.fileName}' uploaded. You can now ask questions about it.` }] }]);
-
-            // setPdfFilesName(files => [...files, { fileName: data.fileName, checked: true }]);
-            // const name = pdfFilesName.filter(file => file.checked).map(file => file.fileName).join(", ");
-            // setPdfFileName(name);
-
             setPdfFilesName((files) => {
                 const updatedFiles = [...files, { fileName: data.fileName, checked: true }];
                 let name = pdfFilesName.filter(file => file.checked).map(file => file.fileName).join(", ");
@@ -223,21 +196,7 @@ const App = () => {
 
         setPdfFilesName(updatedFiles);
 
-        // const selectedFile = updatedFiles.find(file => file.fileName === fileName && file.checked);
-        // if (selectedFile) {
-        //     setSelectedChatDocument(selectedFile.fileName); // Set the selected document name
-        //     console.log("Selected document for chat:", selectedFile.fileName);
-        // } else {
-        //     setSelectedChatDocument(null); // Clear selection if no document is checked
-        //     console.log("No document selected for chat.");
-        // }
-
         setIsProcessing(false); // Reset loading state
-        // setPdfFilesName((prevFiles) =>
-        //     prevFiles.map((file) =>
-        //         file === fileName ? { ...file, checked: !file.checked } : file
-        //     )
-        // );
     };
 
     const handleClearContext = async (fileNameToRemove) => {
@@ -349,14 +308,6 @@ const App = () => {
                     pdfFileName && (
                         <h1>{pdfFileName}</h1>
                     )
-                    // pdfFileName && (
-                    //     <div className="pdf-status">
-                    //         <span>✅ Loaded: {pdfFileName}</span>
-                    //         <button onClick={handleClearContext} disabled={isProcessing} className="clear-context-button">
-                    //             Clear Context
-                    //         </button>
-                    //     </div>
-                    // )
                 }
                 {uploadStatus === 'error' && !error && <p className="error-message">Upload failed. Please try again.</p>}
             </div>
@@ -380,15 +331,13 @@ const App = () => {
 
                 <div className="toggle-container">
                     {/* Use label for accessibility, associate with input via htmlFor/id */}
-                    <label htmlFor="pdf-toggle" className={`switch-label ${!pdfFilesName || isProcessing ? 'disabled' : ''}`}>
+                    <label htmlFor="pdf-toggle" className={`switch-label ${pdfFilesName.length > 0 ? '' : 'disabled'}`}>
                         {/* Hidden actual checkbox that holds the state */}
                         <input
                             type="checkbox"
                             id="pdf-toggle"
                             checked={isPdfQuestion}
-                            // Prevent changing state if the control should be disabled (extra safety)
-                            onChange={(e) => !isProcessing && pdfFilesName && setIsPdfQuestion(e.target.checked)}
-                        // Disable the input itself, which helps accessibility and prevents interaction
+                            onChange={(e) => pdfFilesName.length > 0 && setIsPdfQuestion(e.target.checked)}
                         />
                         {/* This span will be styled as the switch track and knob */}
                         <span className="switch-slider"></span>
