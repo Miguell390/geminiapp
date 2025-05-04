@@ -12,7 +12,6 @@ const App = () => {
     const [pdfFilesName, setPdfFilesName] = useState([]); // Name of the loaded PDF
     const [uploadStatus, setUploadStatus] = useState("idle"); // 'idle', 'uploading', 'success', 'error'
     const [isProcessing, setIsProcessing] = useState(false); // General loading state for API calls
-    const [isPdfQuestion, setIsPdfQuestion] = useState(false); // Default to general question
 
     // Add a new state to track the selected document
     const [selectedChatDocument, setSelectedChatDocument] = useState(null);
@@ -35,15 +34,16 @@ const App = () => {
         const file = event.target.files[0];
         if (file && file.type === "application/pdf") {
             setSelectedFile(file);
-            setError("");
+            setError(""); // Clear previous errors
             setUploadStatus("idle");
             console.log("File selected:", file.name);
         } else {
             setSelectedFile(null);
-            setPdfFileName(null);
+            // setPdfFileName(null); // Clear filename if invalid file selected
             setError("Please select a valid PDF file.");
             setUploadStatus("idle");
         }
+        // Reset the input value so the same file can be selected again if needed
         event.target.value = null;
     };
 
@@ -83,27 +83,36 @@ const App = () => {
             setSelectedFile(null); // Clear selected file after successful upload
             // Optionally clear chat history or add a system message
 
-            // setPdfFilesName(files => [...files, { fileName: data.fileName, checked: true }]);
-            // const name = pdfFilesName.filter(file => file.checked).map(file => file.fileName).join(", ");
-            // setPdfFileName(name);
+            let count = 0;
 
-            setPdfFilesName((files) => {
-                const updatedFiles = [...files, { fileName: data.fileName, checked: true }];
-                let name = pdfFilesName.filter(file => file.checked).map(file => file.fileName).join(", ");
-
-                // Replace the last comma with " and"
-                const lastCommaIndex = name.lastIndexOf(",");
-
-                if (lastCommaIndex !== -1) {
-                    name = name.substring(0, lastCommaIndex) + " and" + name.substring(lastCommaIndex + 1);
+            setPdfFilesName(files => {
+                let updatedFiles = files;
+                // Check if the file already exists in the array
+                const existedFile = pdfFilesName.filter(file => file.fileName === data.fileName);
+                if (existedFile.length === 0) {
+                    updatedFiles = [...files, { fileName: data.fileName, checked: true }];
+                    ++count;
                 }
 
-                setPdfFileName(name);
+                if (count == 1) {
+                    // update name to include new file
+                    let name = updatedFiles.filter(file => file.checked).map(file => file.fileName).join(", ");
+
+                    // Replace the last comma with " and"
+                    const lastCommaIndex = name.lastIndexOf(",");
+
+                    if (lastCommaIndex !== -1) {
+                        name = name.substring(0, lastCommaIndex) + " and" + name.substring(lastCommaIndex + 1);
+                    }
+
+                    setPdfFileName(name);
+
+                    setChatHistory(oldHistory => [...oldHistory, { role: "system", parts: [{ text: `PDF '${data.fileName}' uploaded. You can now ask questions about it.` }] }]);
+                }
 
                 return updatedFiles;
             });
 
-            setChatHistory(oldHistory => [...oldHistory, { role: "system", parts: [{ text: `PDF '${data.fileName}' uploaded. You can now ask questions about it.` }] }]);
         } catch (err) {
             console.error("Upload failed:", err);
             setError(`Upload failed: ${err.message}`);
@@ -121,12 +130,6 @@ const App = () => {
             return;
         }
 
-        // --- Check if asking PDF question without PDF loaded ---
-        if (isPdfQuestion && !pdfFileName) {
-            setError("Error: No PDF is loaded. Please upload a PDF or switch the toggle to ask a general question.");
-            return;
-        }
-
         setError(""); // Clear previous errors
         setIsProcessing(true); // Set loading state
         const currentMessage = value; // Capture value before clearing
@@ -140,17 +143,13 @@ const App = () => {
                 body: JSON.stringify({
                     history: chatHistory,
                     message: currentMessage, // Send the captured message
-                    // --- Send the toggle state ---
-                    isPdfContextRequired: isPdfQuestion, // Send boolean flag
                     selectedChatDocument: selectedDocuments // Send the selected document name
                 }),
                 headers: {
                     'Content-Type': "application/json"
                 }
             };
-            let api = 'http://localhost:8000/gemini';
-
-            const response = await fetch(api, options);
+            const response = await fetch('http://localhost:8000/gemini', options);
             const data = await response.json(); // Backend now sends { message: "..." }
 
             if (!response.ok) {
@@ -356,36 +355,6 @@ const App = () => {
                         {!pdfFileName ? "Surprise Me (General)" : "Suggest Question"}
                     </button>
                 </p>
-
-
-                <div className="toggle-container">
-                    {/* Use label for accessibility, associate with input via htmlFor/id */}
-                    <label htmlFor="pdf-toggle" className={`switch-label ${!pdfFileName || isProcessing ? 'disabled' : ''}`}>
-                        {/* Hidden actual checkbox that holds the state */}
-                        <input
-                            type="checkbox"
-                            id="pdf-toggle"
-                            checked={isPdfQuestion}
-                            // Prevent changing state if the control should be disabled (extra safety)
-                            onChange={(e) => !isProcessing && pdfFileName && setIsPdfQuestion(e.target.checked)}
-                        // Disable the input itself, which helps accessibility and prevents interaction
-                        />
-                        {/* This span will be styled as the switch track and knob */}
-                        <span className="switch-slider"></span>
-                        {/* Text describing the toggle's purpose */}
-                        <span className="switch-text">
-                            {pdfFileName
-                                ? <>Use context from: <span className="switch-filename" title={pdfFileName}>{pdfFileName}</span></>
-                                : 'Use PDF Context (Upload PDF first)'}
-                        </span>
-                    </label>
-                    {/* Optional: Add a small helper text explaining the states */}
-                    {pdfFileName && (
-                        <span className="switch-helper-text">
-                            (Toggle ON to ask about the PDF, OFF for general questions)
-                        </span>
-                    )}
-                </div>
 
                 <div className="input-container">
                     <input
