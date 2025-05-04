@@ -57,15 +57,6 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEN_AI_KEY);
 // gemini-pro might have limitations on context length. gemini-1.5-flash or pro often better.
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" }); // Updated model suggestion
 
-// if uploads dir not exist -> create new
-const uploadsDbFile = 'database.json';
-
-// Load previous uploads
-let uploadedFiles = [];
-if (fs.existsSync(uploadsDbFile)) {
-    uploadedFiles = JSON.parse(fs.readFileSync(uploadsDbFile));
-}
-
 // Endpoint to Upload and Process PDF
 app.post('/upload-pdf', upload.single('pdfFile'), async (req, res) => {
     if (!req.file) {
