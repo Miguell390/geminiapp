@@ -6,6 +6,7 @@ const App = () => {
     // --- State Variables ---
     const [error, setError] = useState("");
     const [value, setValue] = useState(""); // User's current chat input
+    const [urlValue, setUrlValue] = useState(""); // User's current chat input
     const [chatHistory, setChatHistory] = useState([]);
     const [selectedFile, setSelectedFile] = useState(null); // Holds the selected PDF file object
     const [pdfFileName, setPdfFileName] = useState(null); // Name of the loaded PDF
@@ -107,6 +108,72 @@ const App = () => {
         }
     };
 
+    // --- URL Handling ---
+    const handleUrlInput = async () => {
+        if (!urlValue) {
+            setError("Error: Please ask a question.");
+            return;
+        }
+
+        setError(""); // Clear previous errors
+        setIsProcessing(true); // Set loading state
+        const currentUrlValue = urlValue; // Capture value before clearing
+        setUrlValue(""); // Clear input immediately for better UX
+
+        try {
+            const options = {
+                method: 'POST',
+                body: JSON.stringify({
+                    url: currentUrlValue
+                }),
+                headers: {
+                    'Content-Type': "application/json"
+                }
+            };
+            let api = 'http://localhost:8000/import-url';
+
+            const response = await fetch(api, options);
+
+            const data = await response.json(); // Expecting JSON response now
+
+            if (!response.ok) {
+                // Handle HTTP errors (e.g., 400, 500)
+                throw new Error(data.message || `HTTP error! status: ${response.status}`);
+            }
+
+            console.log("Upload successful:", data);
+            setUploadStatus("success");
+            // setPdfFileName(data.fileName); // Store the filename from response
+            setSelectedFile(null); // Clear selected file after successful upload
+            // Optionally clear chat history or add a system message
+            setPdfFilesName((files) => {
+                const updatedFiles = [...files, { fileName: data.fileName, checked: true }];
+                let name = updatedFiles.filter(file => file.checked).map(file => file.fileName).join(", ");
+
+                // Replace the last comma with " and"
+                const lastCommaIndex = name.lastIndexOf(",");
+
+                if (lastCommaIndex !== -1) {
+                    name = name.substring(0, lastCommaIndex) + " and" + name.substring(lastCommaIndex + 1);
+                }
+
+                setPdfFileName(name);
+
+                return updatedFiles;
+            });
+
+            setChatHistory(oldHistory => [...oldHistory, { role: "system", parts: [{ text: `PDF '${data.fileName}' uploaded. You can now ask questions about it.` }] }]);
+        } catch (err) {
+            console.error("Upload failed:", err);
+            setError(`Upload failed: ${err.message}`);
+            setUploadStatus("error");
+            // setPdfFileName(null); // Clear filename on error
+        } finally {
+            setIsProcessing(false); // Reset loading state
+        }
+    };
+
+
     // --- Chat Handling ---
     const getResponse = async () => {
         if (!value) {
@@ -150,6 +217,8 @@ const App = () => {
                 // Handle specific errors from Gemini endpoint
                 throw new Error(data.message || `Gemini API error! status: ${response.status}`);
             }
+
+            console.log("Gemini response:", data.message);
 
             console.log("Gemini response data:", data);
 
@@ -238,6 +307,7 @@ const App = () => {
     // Clear chat input, error, history, AND PDF context/selection
     const clearAll = () => {
         setValue("");
+        setUrlValue("");
         setError("");
         setChatHistory([]);
         setPdfFilesName([]);
@@ -262,6 +332,20 @@ const App = () => {
         <div className="app">
             <img src="./pdfWhisperer.jpg" alt="pdf whiseprer logo" className="logo" />
 
+            {/* --- PDF Upload Section --- */}
+            <div className="input-container">
+                <input
+                    value={urlValue}
+                    placeholder="Import content from URL..."
+                    onChange={(e) => setUrlValue(e.target.value)}
+                    onKeyDown={handleKeyDown} // Add Enter key handler
+                    disabled={isProcessing} // Disable during processing
+                />
+                {/* Use a single button, disable when processing */}
+                <button onClick={handleUrlInput} disabled={!urlValue || isProcessing}>
+                    {isProcessing ? 'Thinking...' : 'Import URL'}
+                </button>
+            </div>
 
             {/* --- PDF Upload Section --- */}
             <div className="pdf-section">
@@ -286,7 +370,7 @@ const App = () => {
                 {
                     pdfFilesName.map((file, index) => (
                         <div className="pdf-status" key={index}>
-                            <span>
+                            <span style={{ maxWidth: '75%' }}>
                                 <input
                                     type="checkbox"
                                     checked={file.checked}
@@ -299,7 +383,7 @@ const App = () => {
                                 disabled={isProcessing}
                                 className="clear-context-button"
                             >
-                                Remove document
+                                Remove source
                             </button>
                         </div>
                     ))
@@ -415,7 +499,7 @@ h1 { text-align: center; color: #333; }
 .pdf-button { background-color: #28a745; color: white; }
 .pdf-button:disabled { background-color: #aaa; }
 .pdf-button:hover:not(:disabled) { background-color: #218838; }
-.clear-context-button { background-color: #ffc107; color: #333; }
+.clear-context-button { background-color: #ffc107; color: #333; min-width: 25%; }
 .clear-context-button:hover:not(:disabled) { background-color: #e0a800; }
 .clear-button { background-color: #dc3545; color: white; display: block; margin: 15px auto 0;}
 .clear-button:hover:not(:disabled) { background-color: #c82333; }
