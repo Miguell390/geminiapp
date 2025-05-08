@@ -218,7 +218,7 @@ const App = () => {
                 throw new Error(data.message || `Gemini API error! status: ${response.status}`);
             }
 
-            console.log("Gemini response:", data.message);
+            // console.log("Gemini response:", data.message);
 
             console.log("Gemini response data:", data);
 
