@@ -17,7 +17,7 @@ const uploadsDir = 'uploads/'; // Directory where PDFs are stored
 const uploadsDbFile = 'database.json'; // File storing metadata and text context
 
 // Ensure uploads directory exists
-if (!fs.existsSync(uploadsDir)){
+if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir);
     console.log(`Created directory: ${uploadsDir}`);
 }
@@ -56,6 +56,10 @@ const upload = multer({
         }
     }
 });
+
+// --- URL SCRAPING ---
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 // --- Gemini API Initialization ---
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEN_AI_KEY);
@@ -97,6 +101,47 @@ app.post('/upload-pdf', upload.single('pdfFile'), async (req, res) => {
             try { await fs.promises.unlink(req.file.path); } catch (cleanupErr) { console.error("Cleanup error:", cleanupErr); }
         }
         res.status(500).send({ message: 'Error processing PDF file.', error: error.message });
+    }
+});
+
+app.post('/import-url', async (req, res) => {
+    const url = req.body.url;
+
+    if (!url) {
+        return res.status(400).send({ message: 'Invalid url' });
+    }
+
+    try {
+        const response = await axios.get(url);
+        const html = response.data;
+
+        // Load the HTML into cheerio
+        const $ = cheerio.load(html);
+
+        // Extract and clean up all text content
+        const textContent = $('body').text().replace(/\s+/g, ' ').trim();
+
+        console.log('Text content from the website:\n');
+        console.log(textContent.slice(0, 1000)); // print first 1000 characters for preview
+
+        const fileInfo = {
+            path: null, // No file path since it's a URL
+            originalname: url,
+            uploadTime: new Date(),
+            pdfTextContext: textContent // Store extracted text here
+        };
+
+        uploadedFiles.push(fileInfo);
+        fs.writeFileSync(uploadsDbFile, JSON.stringify(uploadedFiles, null, 2));
+
+        console.log(`Successfully processed ${fileInfo.originalname}. Text length: ${fileInfo.pdfTextContext.length}`);
+        res.send({
+            message: `PDF '${fileInfo.originalname}' processed successfully. You can now ask questions about it.`,
+            fileName: fileInfo.originalname
+        });
+    } catch (error) {
+        console.error('Error scraping the website:', error.message);
+        res.status(500).send({ message: 'Error processing the url.', error: error.message });
     }
 });
 
