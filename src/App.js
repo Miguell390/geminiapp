@@ -376,7 +376,10 @@ const App = () => {
                                     checked={file.checked}
                                     onChange={() => handleDocumentSelection(file.fileName)}
                                 />
-                                Loaded: {file.fileName}
+                                Loaded: {
+                                    file.fileName.includes("http") ?
+                                        <a href={file.fileName} target="blank">{file.fileName}</a> :
+                                        file.fileName}
                             </span>
                             <button
                                 onClick={() => handleClearContext(file.fileName)}
@@ -389,9 +392,9 @@ const App = () => {
                     ))
                 }
                 {
-                    pdfFileName && (
-                        <h1>{pdfFileName}</h1>
-                    )
+                    // pdfFileName && (
+                    //     <h1>{pdfFileName}</h1>
+                    // )
                 }
                 {uploadStatus === 'error' && !error && <p className="error-message">Upload failed. Please try again.</p>}
             </div>
