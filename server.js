@@ -278,6 +278,7 @@ ${currentContext}
                 } else {
                     combinedContextPrompt = `Based *only* on the following text content extracted from the documents '${selectedChatDocument.join(', ')}', please answer the user's question.`;
                 }
+                combinedContextPrompt += `Please answer with reference on which document you get the answer from in the format as "Based on <title> of document".`;
                 combinedContextPrompt += ` If the answer cannot be found in the text, state that clearly. Do not use any prior knowledge outside of this document context.\n\n`;
 
                 // Append context from each selected document
