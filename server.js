@@ -136,7 +136,7 @@ app.post('/import-url', async (req, res) => {
 
         console.log(`Successfully processed ${fileInfo.originalname}. Text length: ${fileInfo.pdfTextContext.length}`);
         res.send({
-            message: `PDF '${fileInfo.originalname}' processed successfully. You can now ask questions about it.`,
+            message: `Website '${fileInfo.originalname}' processed successfully. You can now ask questions about it.`,
             fileName: fileInfo.originalname
         });
     } catch (error) {
