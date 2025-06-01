@@ -12,17 +12,16 @@ app.use(express.json());
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// --- Persistence Setup ---
-const uploadsDir = 'uploads/'; // Directory where PDFs are stored
-const uploadsDbFile = 'database.json'; // File storing metadata and text context
+const uploadsDir = 'uploads/'; // documents directory
+const uploadsDbFile = 'database.json'; // database json file
 
-// Ensure uploads directory exists
+// check if document directory exists
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir);
     console.log(`Created directory: ${uploadsDir}`);
 }
 
-// Load previous uploads metadata
+// check if database file exists
 let uploadedFiles = [];
 if (fs.existsSync(uploadsDbFile)) {
     try {
@@ -34,10 +33,10 @@ if (fs.existsSync(uploadsDbFile)) {
     }
 }
 
-// --- Multer Configuration (Disk Storage) ---
+// multer storage configuration 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        cb(null, uploadsDir); // Use the defined directory
+        cb(null, uploadsDir);
     },
     filename: function (req, file, cb) {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -45,6 +44,7 @@ const storage = multer.diskStorage({
     }
 });
 
+// multer file upload configuration 
 const upload = multer({
     storage: storage,
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
@@ -57,17 +57,15 @@ const upload = multer({
     }
 });
 
-// --- URL SCRAPING ---
+// for url scraping
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-// --- Gemini API Initialization ---
+// Gemini config
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEN_AI_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
-// --- API Endpoints ---
-
-// Endpoint to Upload and Process PDF
+// endpoint to upload and process file
 app.post('/upload-pdf', upload.single('pdfFile'), async (req, res) => {
     if (!req.file) {
         return res.status(400).send({ message: 'No PDF file uploaded.' });
@@ -78,13 +76,13 @@ app.post('/upload-pdf', upload.single('pdfFile'), async (req, res) => {
         const data = await pdf(fileContent);
 
         const fileInfo = {
-            path: req.file.path, // Path to the actual PDF file
-            originalname: req.file.originalname,
-            uploadTime: new Date(),
-            pdfTextContext: data.text // Store extracted text here
+            path: req.file.path, // path to the actual PDF file
+            originalname: req.file.originalname, // original file name or website url
+            uploadTime: new Date(), // added timestamp 
+            pdfTextContext: data.text // extracted content
         };
 
-        // Add new file info and save
+        // add new record to database
         uploadedFiles.push(fileInfo);
         fs.writeFileSync(uploadsDbFile, JSON.stringify(uploadedFiles, null, 2));
 
@@ -96,7 +94,7 @@ app.post('/upload-pdf', upload.single('pdfFile'), async (req, res) => {
 
     } catch (error) {
         console.error('Error processing PDF:', error);
-        // Attempt to clean up the uploaded file if processing failed
+        // attempt to clean up the uploaded file if processing failed
         if (req.file && req.file.path && fs.existsSync(req.file.path)) {
             try { await fs.promises.unlink(req.file.path); } catch (cleanupErr) { console.error("Cleanup error:", cleanupErr); }
         }
@@ -104,33 +102,34 @@ app.post('/upload-pdf', upload.single('pdfFile'), async (req, res) => {
     }
 });
 
+// endpoint to import content from website url
 app.post('/import-url', async (req, res) => {
     const url = req.body.url;
 
+    // check if url is provided
     if (!url) {
         return res.status(400).send({ message: 'Invalid url' });
     }
 
     try {
+        // load website
         const response = await axios.get(url);
         const html = response.data;
 
-        // Load the HTML into cheerio
+        // load the HTML into cheerio
         const $ = cheerio.load(html);
 
-        // Extract and clean up all text content
+        // extract and clean up all text content
         const textContent = $('body').text().replace(/\s+/g, ' ').trim();
 
-        console.log('Text content from the website:\n');
-        console.log(textContent.slice(0, 1000)); // print first 1000 characters for preview
-
         const fileInfo = {
-            path: null, // No file path since it's a URL
-            originalname: url,
+            path: null, // not store any file, so no file path
+            originalname: url, // store website url
             uploadTime: new Date(),
-            pdfTextContext: textContent // Store extracted text here
+            pdfTextContext: textContent // extracted website content
         };
 
+        // push new record to database
         uploadedFiles.push(fileInfo);
         fs.writeFileSync(uploadsDbFile, JSON.stringify(uploadedFiles, null, 2));
 
@@ -145,7 +144,7 @@ app.post('/import-url', async (req, res) => {
     }
 });
 
-// Endpoint to Clear PDF Context (Deletes file and removes record)
+// endpoint to clear context - delete files and remove records from database
 app.post('/clear-context', async (req, res) => {
     const fileNameToClear = req.body.fileName;
     console.log(`Attempting to clear context for: ${fileNameToClear}`);
@@ -159,15 +158,15 @@ app.post('/clear-context', async (req, res) => {
 
     const fileToRemove = uploadedFiles[fileIndex];
 
-    // Remove from array
+    // remove from array of uploadedFiles
     uploadedFiles.splice(fileIndex, 1);
 
     try {
-        // Update the JSON database file
+        // update the database to new uploadedFiles
         fs.writeFileSync(uploadsDbFile, JSON.stringify(uploadedFiles, null, 2));
         console.log(`Removed record for ${fileNameToClear} from ${uploadsDbFile}`);
 
-        // Delete the actual PDF file from disk
+        // delete the PDF file from directory
         if (fs.existsSync(fileToRemove.path)) {
             await fs.promises.unlink(fileToRemove.path);
             console.log(`Deleted file: ${fileToRemove.path}`);
@@ -185,7 +184,7 @@ app.post('/clear-context', async (req, res) => {
     }
 });
 
-// --- Modified Endpoint for Chatting with Gemini (Includes Update Logic) ---
+// endpoint to chat with gemini
 app.post('/gemini', async (req, res) => {
     try {
         const { history, message, isPdfContextRequired, selectedChatDocument } = req.body;
@@ -194,14 +193,14 @@ app.post('/gemini', async (req, res) => {
             return res.status(400).send({ message: 'Message cannot be empty.' });
         }
 
-        let responseText = ""; // Variable to hold the final text to send back
+        let responseText = "";
 
-        // --- Check if PDF context is requested and available ---
+        // check if use documents for chatting
         if (isPdfContextRequired && selectedChatDocument && selectedChatDocument.length > 0) {
 
-            // --- Determine if it's an UPDATE request (requires EXACTLY ONE document) ---
+            // check if intent is to update document
             const isUpdateRequest = (
-                selectedChatDocument.length === 1 && ( // MUST have only one document selected for update
+                selectedChatDocument.length === 1 && ( // must have only one document selected for update
                     message.toLowerCase().includes('update ') ||
                     message.toLowerCase().includes('change ') ||
                     message.toLowerCase().includes('modify ') ||
@@ -212,10 +211,11 @@ app.post('/gemini', async (req, res) => {
             );
 
             if (isUpdateRequest) {
-                // === UPDATE CONTEXT LOGIC ===
+                // update document context
                 const targetDocumentName = selectedChatDocument[0];
                 const targetFileIndex = uploadedFiles.findIndex(file => file.originalname === targetDocumentName);
 
+                // check if selected file existed
                 if (targetFileIndex === -1) {
                     console.error(`Attempted to update non-existent document record: ${targetDocumentName}`);
                     responseText = `Sorry, I couldn't find the document '${targetDocumentName}' to update. Please ensure it's uploaded and selected.`;
@@ -243,11 +243,12 @@ ${currentContext}
                         const response = await result.response;
                         const updatedText = response.text();
 
-                        if (updatedText && updatedText.trim().length > 0 && updatedText.trim() !== currentContext.trim() /* Ensure change occurred */) {
-                            // Update the context in the array
+                        // check if update is successful
+                        if (updatedText && updatedText.trim().length > 0 && updatedText.trim() !== currentContext.trim()) {
+                            // replace the content with the updated one
                             uploadedFiles[targetFileIndex].pdfTextContext = updatedText;
 
-                            // Persist the change to database.json
+                            // change the database.json content
                             fs.writeFileSync(uploadsDbFile, JSON.stringify(uploadedFiles, null, 2));
 
                             console.log(`Context updated successfully for ${targetDocumentName}. New length: ${updatedText.length}`);
@@ -268,20 +269,22 @@ ${currentContext}
                 } // End if targetFileIndex !== -1
 
             } else {
-                // === STANDARD Q&A WITH CONTEXT LOGIC ===
+                // normal chatting with documents
                 console.log(`Performing Q&A using context from: ${selectedChatDocument.join(', ')}`);
                 let combinedContextPrompt = "";
 
-                // Build prefix based on single/multiple docs
+                // check if single document selected
                 if (selectedChatDocument.length === 1) {
                     combinedContextPrompt = `Based *only* on the following text content extracted from the document '${selectedChatDocument[0]}', please answer the user's question.`;
                 } else {
+                    // else multiple documents selected
                     combinedContextPrompt = `Based *only* on the following text content extracted from the documents '${selectedChatDocument.join(', ')}', please answer the user's question.`;
                 }
+
                 combinedContextPrompt += `Please answer with reference on which document you get the answer from in the format as "Based on <title> of document".`;
                 combinedContextPrompt += ` If the answer cannot be found in the text, state that clearly. Do not use any prior knowledge outside of this document context.\n\n`;
 
-                // Append context from each selected document
+                // loop and append context from each selected document
                 for (const docName of selectedChatDocument) {
                     const fileInfo = uploadedFiles.find(f => f.originalname === docName);
                     if (fileInfo) {
@@ -302,10 +305,10 @@ ${currentContext}
                 responseText = response.text();
                 console.log("Gemini Q&A Response:", responseText.substring(0, 200) + "...");
 
-            } // End else (standard Q&A)
+            }
 
         } else {
-            // --- GENERAL Q&A LOGIC (NO CONTEXT REQUESTED) ---
+            // general chatting (no documents are used)
             const generalPrompt = message; // Just the user's message
             console.log("Processing as a general question (no PDF context).");
             console.log("Sending General Q to Gemini:", generalPrompt.substring(0, 300) + "...");
@@ -316,7 +319,6 @@ ${currentContext}
             console.log("Gemini General Response:", responseText.substring(0, 200) + "...");
         }
 
-        // Send the final response (either confirmation or answer)
         res.send({ message: responseText });
 
     } catch (error) {
@@ -332,7 +334,7 @@ ${currentContext}
 });
 
 
-// --- Error Handler for Multer ---
+// error handler for multer
 app.use((err, req, res, next) => {
     if (err instanceof multer.MulterError) {
         console.error('Multer Error:', err);
